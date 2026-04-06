@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ──────────────────────────────────────────────
+# yeet — Granola transcript → shareable link
+# Backends: gist (default) | jotbird
+#
+# Usage:
+#   yeet              # uses gist
+#   yeet --jotbird    # uses jotbird
+#   yeet -j           # uses jotbird (short)
+#   YEET_BACKEND=jotbird yeet  # env override
+# ──────────────────────────────────────────────
+
+GRANOLA="npx granola-cli"
+LIMIT="${YEET_LIMIT:-20}"
+
+# ── Backend selection ──
+BACKEND="${YEET_BACKEND:-gist}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --jotbird|-j) BACKEND="jotbird"; shift ;;
+    --gist|-g)    BACKEND="gist"; shift ;;
+    --limit|-l)   LIMIT="$2"; shift 2 ;;
+    --help|-h)
+      echo "Usage: yeet [--gist|-g] [--jotbird|-j] [--limit|-l N]"
+      echo ""
+      echo "  --gist, -g       Publish via GitHub Gist (default)"
+      echo "  --jotbird, -j    Publish via Jotbird"
+      echo "  --limit, -l N    Number of meetings to show (default: 20)"
+      echo ""
+      echo "  Env: YEET_BACKEND=gist|jotbird  YEET_LIMIT=N"
+      exit 0
+      ;;
+    *) echo "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
+# ── Colors ──
+bold="\033[1m"
+dim="\033[2m"
+green="\033[32m"
+red="\033[31m"
+cyan="\033[36m"
+yellow="\033[33m"
+reset="\033[0m"
+
+info()  { printf "${cyan}▸${reset} %s\n" "$*"; }
+ok()    { printf "${green}✓${reset} %s\n" "$*"; }
+warn()  { printf "${yellow}⚠${reset} %s\n" "$*"; }
+fail()  { printf "${red}✗${reset} %s\n" "$*" >&2; exit 1; }
+
+# ── Dependency check ──
+command -v fzf &>/dev/null || fail "'fzf' not found. brew install fzf"
+
+if [[ "$BACKEND" == "gist" ]]; then
+  command -v gh &>/dev/null || fail "'gh' not found. brew install gh"
+else
+  command -v jotbird &>/dev/null || fail "'jotbird' not found. Install it first."
+fi
+
+# ── Copy to clipboard (cross-platform) ──
+clip() {
+  if command -v pbcopy &>/dev/null; then
+    echo -n "$1" | pbcopy
+  elif command -v xclip &>/dev/null; then
+    echo -n "$1" | xclip -selection clipboard
+  elif command -v xsel &>/dev/null; then
+    echo -n "$1" | xsel --clipboard
+  fi
+}
+
+# ── Step 1: Granola auth + fetch meetings ──
+# Auth status is unreliable, so we verify by actually fetching.
+# If it fails, we prompt login and retry once.
+fetch_meetings() {
+  $GRANOLA meeting list --limit "$LIMIT" --output json 2>&1
+}
+
+info "Fetching recent meetings..."
+meetings_json=$(fetch_meetings) || true
+
+if echo "$meetings_json" | grep -qi "authentication required\|not authenticated\|auth"; then
+  warn "Granola session expired."
+  info "Logging in..."
+  $GRANOLA auth login
+  info "Retrying fetch..."
+  meetings_json=$(fetch_meetings) || fail "Still failing after login. Try: npx granola-cli auth login"
+  if echo "$meetings_json" | grep -qi "authentication required\|not authenticated\|auth"; then
+    fail "Authentication failed. Run manually: npx granola-cli auth login"
+  fi
+fi
+ok "Granola authenticated"
+
+# ── Step 2: GitHub auth check (gist backend only) ──
+if [[ "$BACKEND" == "gist" ]]; then
+  if ! gh auth status &>/dev/null 2>&1; then
+    info "Not logged into GitHub CLI. Running gh auth login..."
+    gh auth login
+    gh auth status &>/dev/null 2>&1 || fail "GitHub authentication failed."
+  fi
+  ok "GitHub authenticated"
+fi
+
+# ── Step 3: Interactive meeting picker ──
+lines=$(echo "$meetings_json" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+items = data if isinstance(data, list) else data.get('meetings', data.get('data', []))
+for m in items:
+    mid = m.get('id', '???')
+    title = (m.get('title') or 'Untitled')[:80]
+    cal = m.get('google_calendar_event') or {}
+    start = (cal.get('start') or {}).get('dateTime', '')
+    date = (start or m.get('created_at', ''))[:16]
+    print(f'{mid}\t{date}\t{title}')
+") || fail "Failed to parse meeting list."
+
+[ -z "$lines" ] && fail "No meetings found."
+
+selected=$(echo "$lines" \
+  | fzf --prompt="Select meeting › " \
+        --header="Date              Title" \
+        --delimiter=$'\t' \
+        --with-nth=2,3 \
+        --tabstop=18 \
+        --height=40% \
+        --reverse \
+        --border \
+        --ansi) || exit 0
+
+meeting_id=$(echo "$selected" | cut -f1)
+meeting_title=$(echo "$selected" | cut -f3)
+meeting_title_clean=$(echo "$meeting_title" | tr -dc '[:alnum:] _-' | tr ' ' '-' | head -c 80)
+
+[ -z "$meeting_id" ] && fail "No meeting selected."
+ok "Selected: ${meeting_title}"
+
+# ── Step 4: Fetch transcript ──
+info "Fetching transcript..."
+tmpfile="/tmp/yeet-${meeting_id}.md"
+$GRANOLA meeting transcript "$meeting_id" > "$tmpfile" \
+  || fail "Failed to fetch transcript for $meeting_id"
+[ ! -s "$tmpfile" ] && fail "Transcript is empty."
+
+# ── Step 5: Publish via selected backend ──
+url=""
+
+if [[ "$BACKEND" == "gist" ]]; then
+  info "Publishing to GitHub Gist..."
+  filename="${meeting_title_clean:-transcript}-${meeting_id:0:8}.md"
+  gist_output=$(gh gist create "$tmpfile" \
+    --desc "Meeting transcript: ${meeting_title}" \
+    --filename "$filename" \
+    2>&1) || fail "Gist creation failed: $gist_output"
+  url=$(echo "$gist_output" | grep -oE 'https?://[^ ]+' | head -1)
+
+else
+  info "Publishing to Jotbird..."
+  jotbird_output=$(jotbird publish "$tmpfile" 2>&1) \
+    || fail "Jotbird publish failed: $jotbird_output"
+  url=$(echo "$jotbird_output" | grep -oE 'https?://[^ ]+' | head -1)
+fi
+
+# ── Step 6: Show URL + copy to clipboard ──
+rm -f "$tmpfile"
+
+if [ -n "$url" ]; then
+  clip "$url"
+  echo ""
+  ok "Yeeted via ${BACKEND}! URL copied to clipboard:"
+  printf "   ${bold}${cyan}%s${reset}\n\n" "$url"
+else
+  fail "Published but couldn't extract URL from output."
+fi
