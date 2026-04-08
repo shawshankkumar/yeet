@@ -47,7 +47,7 @@ rm $(which yeet)
 
 | Tool | Install | Required for |
 |------|---------|-------------|
-| `node` / `npx` | `brew install node` | Granola CLI |
+| `node` / `npm` | `brew install node` | Granola CLI |
 | `fzf` | `brew install fzf` | Interactive picker |
 | `gh` | `brew install gh` | Gist backend (default) |
 | `python3` | `brew install python3` | JSON parsing |
@@ -88,11 +88,13 @@ YEET_LIMIT=50 yeet          # override meeting count
 ## How it works
 
 1. Checks Granola auth (re-authenticates if session expired)
-2. Fetches recent meetings via `npx granola-cli meeting list`
+2. Fetches recent meetings via `npm exec --yes --package=granola-cli -- granola meeting list`
 3. Presents an interactive `fzf` picker with date + title
 4. Fetches the selected meeting's transcript
 5. Publishes via your chosen backend
 6. Copies the shareable URL to clipboard
+
+The installer also preloads the Granola CLI package, and `yeet` bootstraps it again on launch if needed, so first-time runs do not hang on an interactive `npx` install prompt.
 
 ## License
 

@@ -9,6 +9,7 @@ set -euo pipefail
 VERSION="1.0.0"
 REPO="aakashlpin/yeet"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
+GRANOLA_PKG="granola-cli"
 
 bold="\033[1m"
 green="\033[32m"
@@ -75,8 +76,8 @@ if ! command -v node &>/dev/null; then
   missing+=("node (brew install node)")
 fi
 
-if ! command -v npx &>/dev/null; then
-  missing+=("npx (comes with node)")
+if ! command -v npm &>/dev/null; then
+  missing+=("npm (comes with node)")
 fi
 
 if ! command -v fzf &>/dev/null; then
@@ -93,6 +94,13 @@ fi
 
 if [ ${#missing[@]} -eq 0 ]; then
   ok "All dependencies found"
+
+  info "Preparing Granola CLI (${GRANOLA_PKG})..."
+  if npm exec --yes --package="${GRANOLA_PKG}" -- granola --version >/dev/null 2>&1; then
+    ok "Granola CLI ready"
+  else
+    warn "Could not preinstall ${GRANOLA_PKG}. yeet will retry on first run."
+  fi
 else
   warn "Missing dependencies:"
   for dep in "${missing[@]}"; do

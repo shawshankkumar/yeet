@@ -12,7 +12,7 @@ set -euo pipefail
 #   YEET_BACKEND=jotbird yeet  # env override
 # ──────────────────────────────────────────────
 
-GRANOLA="npx granola-cli"
+GRANOLA_PKG="${YEET_GRANOLA_PACKAGE:-granola-cli}"
 LIMIT="${YEET_LIMIT:-20}"
 
 # ── Backend selection ──
@@ -50,7 +50,12 @@ ok()    { printf "${green}✓${reset} %s\n" "$*"; }
 warn()  { printf "${yellow}⚠${reset} %s\n" "$*"; }
 fail()  { printf "${red}✗${reset} %s\n" "$*" >&2; exit 1; }
 
+granola() {
+  npm exec --yes --package="$GRANOLA_PKG" -- granola "$@"
+}
+
 # ── Dependency check ──
+command -v npm &>/dev/null || fail "'npm' not found. Install Node.js (brew install node)"
 command -v fzf &>/dev/null || fail "'fzf' not found. brew install fzf"
 
 if [[ "$BACKEND" == "gist" ]]; then
@@ -73,8 +78,12 @@ clip() {
 # ── Step 1: Granola auth + fetch meetings ──
 # Auth status is unreliable, so we verify by actually fetching.
 # If it fails, we prompt login and retry once.
+info "Preparing Granola CLI..."
+granola --version >/dev/null 2>&1 \
+  || fail "Failed to install or run ${GRANOLA_PKG}. Check your Node/npm setup, then try again."
+
 fetch_meetings() {
-  $GRANOLA meeting list --limit "$LIMIT" --output json 2>&1
+  granola meeting list --limit "$LIMIT" --output json 2>&1
 }
 
 info "Fetching recent meetings..."
@@ -83,11 +92,11 @@ meetings_json=$(fetch_meetings) || true
 if echo "$meetings_json" | grep -qi "authentication required\|not authenticated\|auth"; then
   warn "Granola session expired."
   info "Logging in..."
-  $GRANOLA auth login
+  granola auth login
   info "Retrying fetch..."
-  meetings_json=$(fetch_meetings) || fail "Still failing after login. Try: npx granola-cli auth login"
+  meetings_json=$(fetch_meetings) || fail "Still failing after login. Try: npm exec --yes --package=${GRANOLA_PKG} -- granola auth login"
   if echo "$meetings_json" | grep -qi "authentication required\|not authenticated\|auth"; then
-    fail "Authentication failed. Run manually: npx granola-cli auth login"
+    fail "Authentication failed. Run manually: npm exec --yes --package=${GRANOLA_PKG} -- granola auth login"
   fi
 fi
 ok "Granola authenticated"
@@ -139,7 +148,7 @@ ok "Selected: ${meeting_title}"
 # ── Step 4: Fetch transcript ──
 info "Fetching transcript..."
 tmpfile="/tmp/yeet-${meeting_id}.md"
-$GRANOLA meeting transcript "$meeting_id" > "$tmpfile" \
+granola meeting transcript "$meeting_id" > "$tmpfile" \
   || fail "Failed to fetch transcript for $meeting_id"
 [ ! -s "$tmpfile" ] && fail "Transcript is empty."
 
