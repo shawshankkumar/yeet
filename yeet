@@ -161,7 +161,7 @@ if [[ "$CONTENT_SET" -eq 0 ]] && [ -t 1 ]; then
   # col 1 = value (returned), col 2 = label (the only column fzf shows)
   choice=$(printf '%s\t%s\n' \
     "notes"      "Notes & AI summary" \
-    "transcript" "Transcript (premium feature only)" \
+    "transcript" "Transcript (works only with Granola Premium)" \
     | fzf --prompt="Publish what? › " \
           --delimiter=$'\t' --with-nth=2 \
           --height=20% --reverse --border) || exit 0

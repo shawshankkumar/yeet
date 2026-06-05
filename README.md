@@ -40,7 +40,7 @@ Over MCP, the raw transcript tool (`get_meeting_transcript`) is **paid-plan only
 After you pick a meeting, `yeet` asks **what to publish**:
 
 - **Notes & AI summary** — `get_meetings`, works on **all plans** (default if you skip the prompt)
-- **Transcript (premium feature only)** — `get_meeting_transcript`, **paid plan only**; fails with a clear message on the free plan
+- **Transcript (works only with Granola Premium)** — `get_meeting_transcript`, **paid plan only**; fails with a clear message on the free plan
 
 You can skip the prompt with a flag (`yeet --notes` / `yeet --transcript`) or `YEET_CONTENT`.
 
