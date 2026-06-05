@@ -1,0 +1,13 @@
+{
+  "name": "yeet-granola-mcp",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MCP client helper for yeet — talks to the Granola MCP server",
+  "type": "module",
+  "bin": {
+    "granola-mcp": "granola-mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}
