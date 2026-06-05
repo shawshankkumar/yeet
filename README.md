@@ -37,10 +37,12 @@ $ yeet
 
 Over MCP, the raw transcript tool (`get_meeting_transcript`) is **paid-plan only**. On the free plan it returns *"Transcripts are only available to paid Granola tiers."*
 
-So `yeet` defaults to publishing the meeting's **notes + AI summary** (`get_meetings`), which works on **all plans**:
+After you pick a meeting, `yeet` asks **what to publish**:
 
-- `yeet` → notes + summary (default, free plan friendly)
-- `yeet --transcript` → raw transcript (**paid plan only**; fails with a clear message otherwise)
+- **Notes & AI summary** — `get_meetings`, works on **all plans** (default if you skip the prompt)
+- **Transcript (premium feature only)** — `get_meeting_transcript`, **paid plan only**; fails with a clear message on the free plan
+
+You can skip the prompt with a flag (`yeet --notes` / `yeet --transcript`) or `YEET_CONTENT`.
 
 The free plan also only exposes your **own** notes from the **last 30 days** (no team-space access).
 
@@ -112,7 +114,7 @@ YEET_TIME_RANGE=this_week yeet # this_week | last_week | last_30_days
 1. Connects to the Granola MCP server (browser OAuth on first run; cached token after)
 2. Lists recent meetings via the `list_meetings` MCP tool
 3. Presents an interactive `fzf` picker with date + title
-4. Fetches the selected meeting's **notes + summary** (`get_meetings`), or the raw **transcript** (`get_meeting_transcript`, paid plan) with `--transcript`
+4. Asks whether to publish **notes + summary** (`get_meetings`, all plans) or the raw **transcript** (`get_meeting_transcript`, paid plan) — unless you passed `--notes`/`--transcript`
 5. Publishes via your chosen backend
 6. Copies the shareable URL to clipboard
 

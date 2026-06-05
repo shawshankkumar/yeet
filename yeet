@@ -23,24 +23,28 @@ set -euo pipefail
 LIMIT="${YEET_LIMIT:-20}"
 BACKEND="${YEET_BACKEND:-gist}"
 CONTENT="${YEET_CONTENT:-notes}"   # notes | transcript
+# Was the content type explicitly chosen (flag/env)? If not, we ask interactively.
+CONTENT_SET=0
+[[ -n "${YEET_CONTENT:-}" ]] && CONTENT_SET=1
 
 # ── Argument parsing ──
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --jotbird|-j)    BACKEND="jotbird"; shift ;;
     --gist|-g)       BACKEND="gist"; shift ;;
-    --notes|-n)      CONTENT="notes"; shift ;;
-    --transcript|-t) CONTENT="transcript"; shift ;;
+    --notes|-n)      CONTENT="notes"; CONTENT_SET=1; shift ;;
+    --transcript|-t) CONTENT="transcript"; CONTENT_SET=1; shift ;;
     --limit|-l)      LIMIT="$2"; shift 2 ;;
     --help|-h)
-      echo "Usage: yeet [--gist|-g] [--jotbird|-j] [--notes|-n] [--limit|-l N]"
+      echo "Usage: yeet [--gist|-g] [--jotbird|-j] [--notes|-n|--transcript|-t] [--limit|-l N]"
       echo ""
       echo "  --gist, -g        Publish via GitHub Gist (default)"
       echo "  --jotbird, -j     Publish via Jotbird"
-      echo "  --notes, -n       Publish meeting notes + AI summary (default; free plan)"
-      echo "  --transcript, -t  Publish the raw transcript (paid Granola plan only)"
+      echo "  --notes, -n       Publish meeting notes + AI summary (free plan)"
+      echo "  --transcript, -t  Publish the raw transcript (premium / paid Granola plan)"
       echo "  --limit, -l N     Number of meetings to show (default: 20)"
       echo ""
+      echo "  With no --notes/--transcript flag, yeet asks which to publish."
       echo "  Env: YEET_BACKEND=gist|jotbird  YEET_LIMIT=N  YEET_CONTENT=notes|transcript"
       exit 0
       ;;
@@ -148,10 +152,25 @@ selected=$(echo "$lines" \
 
 meeting_id=$(echo "$selected" | cut -f1)
 meeting_title=$(echo "$selected" | cut -f3)
-meeting_title_clean=$(echo "$meeting_title" | tr -dc '[:alnum:] _-' | tr ' ' '-' | head -c 80)
 
 [ -z "$meeting_id" ] && fail "No meeting selected."
 ok "Selected: ${meeting_title}"
+
+# ── Step 3b: Choose what to publish (only if not set via flag/env) ──
+if [[ "$CONTENT_SET" -eq 0 ]] && [ -t 1 ]; then
+  choice=$(printf '%s\n' \
+    "Notes & AI summary" \
+    "Transcript (premium feature only)" \
+    | fzf --prompt="Publish what? › " \
+          --height=20% \
+          --reverse \
+          --border) || exit 0
+  case "$choice" in
+    Transcript*) CONTENT="transcript" ;;
+    Notes*)      CONTENT="notes" ;;
+    *)           exit 0 ;;
+  esac
+fi
 
 # ── Step 4: Fetch content (transcript or notes) via MCP ──
 tmpfile="/tmp/yeet-${meeting_id}.md"
@@ -177,7 +196,7 @@ desc_kind=$([[ "$CONTENT" == "notes" ]] && echo "notes" || echo "transcript")
 
 if [[ "$BACKEND" == "gist" ]]; then
   info "Publishing to GitHub Gist..."
-  filename="${meeting_title_clean:-meeting}-${meeting_id:0:8}.md"
+  filename="call-${meeting_id}.md"
   gist_output=$(gh gist create "$tmpfile" \
     --desc "Meeting ${desc_kind}: ${meeting_title}" \
     --filename "$filename" \
