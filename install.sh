@@ -3,13 +3,13 @@ set -euo pipefail
 
 # ──────────────────────────────────────────────
 # yeet installer
-# curl -fsSL https://raw.githubusercontent.com/aakashlpin/yeet/main/install.sh | bash
+# curl -fsSL https://raw.githubusercontent.com/shawshankkumar/yeet/main/install.sh | bash
 # ──────────────────────────────────────────────
 
-VERSION="1.0.0"
-REPO="aakashlpin/yeet"
+VERSION="2.0.0"
+REPO="${YEET_REPO:-shawshankkumar/yeet}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
-GRANOLA_PKG="granola-cli"
+CONFIG_DIR="$HOME/.config/yeet"
 
 bold="\033[1m"
 green="\033[32m"
@@ -35,12 +35,19 @@ fi
 
 info "Installing yeet v${VERSION}..."
 
-# ── Download ──
+# ── Download the yeet entrypoint ──
 curl -fsSL "${RAW_BASE}/yeet" -o "${INSTALL_DIR}/yeet" \
   || fail "Failed to download yeet. Check your internet connection."
 chmod +x "${INSTALL_DIR}/yeet"
-
 ok "Installed to ${INSTALL_DIR}/yeet"
+
+# ── Download the Granola MCP client helper + its package manifest ──
+mkdir -p "$CONFIG_DIR"
+curl -fsSL "${RAW_BASE}/granola-mcp.mjs" -o "${CONFIG_DIR}/granola-mcp.mjs" \
+  || fail "Failed to download granola-mcp.mjs."
+curl -fsSL "${RAW_BASE}/package.json" -o "${CONFIG_DIR}/package.json" \
+  || fail "Failed to download package.json."
+ok "Installed Granola MCP helper to ${CONFIG_DIR}/granola-mcp.mjs"
 
 # ── Check PATH ──
 if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
@@ -71,35 +78,22 @@ echo ""
 info "Checking dependencies..."
 
 missing=()
-
-if ! command -v node &>/dev/null; then
-  missing+=("node (brew install node)")
-fi
-
-if ! command -v npm &>/dev/null; then
-  missing+=("npm (comes with node)")
-fi
-
-if ! command -v fzf &>/dev/null; then
-  missing+=("fzf (brew install fzf)")
-fi
-
-if ! command -v gh &>/dev/null; then
-  missing+=("gh (brew install gh) — needed for gist backend")
-fi
-
-if ! command -v python3 &>/dev/null; then
-  missing+=("python3 (brew install python3)")
-fi
+command -v node    &>/dev/null || missing+=("node (brew install node)")
+command -v npm     &>/dev/null || missing+=("npm (comes with node)")
+command -v fzf     &>/dev/null || missing+=("fzf (brew install fzf)")
+command -v gh      &>/dev/null || missing+=("gh (brew install gh) — needed for gist backend")
+command -v python3 &>/dev/null || missing+=("python3 (brew install python3)")
 
 if [ ${#missing[@]} -eq 0 ]; then
   ok "All dependencies found"
 
-  info "Preparing Granola CLI (${GRANOLA_PKG})..."
-  if npm exec --yes --package="${GRANOLA_PKG}" -- granola --version >/dev/null 2>&1; then
-    ok "Granola CLI ready"
+  # Preload the MCP client SDK so the first `yeet` run doesn't pause to
+  # npm-install (and never hangs on an interactive npx prompt).
+  info "Installing Granola MCP client dependencies..."
+  if ( cd "$CONFIG_DIR" && npm install --silent >/dev/null 2>&1 ); then
+    ok "Granola MCP client ready"
   else
-    warn "Could not preinstall ${GRANOLA_PKG}. yeet will retry on first run."
+    warn "Could not preinstall MCP client deps. yeet will retry on first run."
   fi
 else
   warn "Missing dependencies:"
@@ -115,10 +109,14 @@ printf "${green}━━━━━━━━━━━━━━━━━━━━━�
 printf "${bold} yeet${reset} installed successfully!\n"
 printf "${green}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${reset}\n"
 echo ""
-printf " Run ${bold}yeet${reset} to pick a Granola meeting\n"
-printf " and publish its transcript as a shareable link.\n"
+printf " Run ${bold}yeet${reset} to pick a Granola meeting and publish its\n"
+printf " notes (or transcript) as a shareable link.\n"
 echo ""
-printf " ${cyan}yeet${reset}              → publish via GitHub Gist\n"
+printf " First run opens your browser to sign in to Granola (OAuth);\n"
+printf " the token is cached so later runs are silent.\n"
+echo ""
+printf " ${cyan}yeet${reset}              → publish notes + summary via GitHub Gist\n"
+printf " ${cyan}yeet -t${reset}           → publish raw transcript (paid Granola plan)\n"
 printf " ${cyan}yeet -j${reset}           → publish via Jotbird\n"
 printf " ${cyan}yeet --help${reset}       → see all options\n"
 echo ""
