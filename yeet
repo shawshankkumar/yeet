@@ -158,18 +158,14 @@ ok "Selected: ${meeting_title}"
 
 # ── Step 3b: Choose what to publish (only if not set via flag/env) ──
 if [[ "$CONTENT_SET" -eq 0 ]] && [ -t 1 ]; then
-  choice=$(printf '%s\n' \
-    "Notes & AI summary" \
-    "Transcript (premium feature only)" \
+  # col 1 = value (returned), col 2 = label (the only column fzf shows)
+  choice=$(printf '%s\t%s\n' \
+    "notes"      "Notes & AI summary" \
+    "transcript" "Transcript (premium feature only)" \
     | fzf --prompt="Publish what? › " \
-          --height=20% \
-          --reverse \
-          --border) || exit 0
-  case "$choice" in
-    Transcript*) CONTENT="transcript" ;;
-    Notes*)      CONTENT="notes" ;;
-    *)           exit 0 ;;
-  esac
+          --delimiter=$'\t' --with-nth=2 \
+          --height=20% --reverse --border) || exit 0
+  CONTENT="${choice%%$'\t'*}"
 fi
 
 # ── Step 4: Fetch content (transcript or notes) via MCP ──
@@ -192,13 +188,12 @@ fi
 
 # ── Step 5: Publish via selected backend ──
 url=""
-desc_kind=$([[ "$CONTENT" == "notes" ]] && echo "notes" || echo "transcript")
 
 if [[ "$BACKEND" == "gist" ]]; then
   info "Publishing to GitHub Gist..."
   filename="call-${meeting_id}.md"
   gist_output=$(gh gist create "$tmpfile" \
-    --desc "Meeting ${desc_kind}: ${meeting_title}" \
+    --desc "Meeting ${CONTENT}: ${meeting_title}" \
     --filename "$filename" \
     2>&1) || fail "Gist creation failed: $gist_output"
   url=$(echo "$gist_output" | grep -oE 'https?://[^ ]+' | head -1)
@@ -215,7 +210,7 @@ rm -f "$tmpfile"
 if [ -n "$url" ]; then
   clip "$url"
   echo ""
-  ok "Yeeted ${desc_kind} via ${BACKEND}! URL copied to clipboard:"
+  ok "Yeeted ${CONTENT} via ${BACKEND}! URL copied to clipboard:"
   printf "   ${bold}${cyan}%s${reset}\n\n" "$url"
 else
   fail "Published but couldn't extract URL from output."
