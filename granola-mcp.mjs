@@ -351,6 +351,16 @@ function decodeXML(s) {
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, "&");
 }
+// decoded text inside <tag>…</tag>, or "" if absent
+function xmlTag(text, tag) {
+  const m = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+  return m ? decodeXML(m[1]).trim() : "";
+}
+// decoded value of a name="…" attribute, or "" if absent
+function xmlAttr(text, name) {
+  const m = text.match(new RegExp(`${name}="([^"]*)"`));
+  return m ? decodeXML(m[1]) : "";
+}
 function normalizeMeetings(payload) {
   if (typeof payload === "string") {
     if (payload.includes("<meeting")) return parseMeetingsXML(payload);
@@ -384,19 +394,14 @@ function normalizeMeetings(payload) {
 // readable markdown. Raw transcript stays paid-only.
 function notesToMarkdown(payload) {
   if (typeof payload !== "string") return JSON.stringify(payload, null, 2);
-  const grab = (tag) => {
-    const m = payload.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
-    return m ? decodeXML(m[1]).trim() : "";
-  };
-  const attr = (name) => {
-    const m = payload.match(new RegExp(`${name}="([^"]*)"`));
-    return m ? decodeXML(m[1]) : "";
-  };
-  const title = attr("title") || "Meeting notes";
-  const date = attr("date");
-  const participants = grab("known_participants");
-  const summary = grab("summary") || grab("ai_summary") || grab("overview");
-  const notes = grab("private_notes") || grab("notes");
+  const title = xmlAttr(payload, "title") || "Meeting notes";
+  const date = xmlAttr(payload, "date");
+  const participants = xmlTag(payload, "known_participants");
+  const summary =
+    xmlTag(payload, "summary") ||
+    xmlTag(payload, "ai_summary") ||
+    xmlTag(payload, "overview");
+  const notes = xmlTag(payload, "private_notes") || xmlTag(payload, "notes");
   const parts = [`# ${title}`];
   if (date) parts.push(`_${date}_`);
   if (participants) parts.push(`**Participants:** ${participants}`);
@@ -487,8 +492,10 @@ async function main() {
   const tools = await resolveTools(client);
 
   if (cmd === "introspect") {
-    const { tools: full } = await client.listTools();
-    process.stdout.write(JSON.stringify(full, null, 2) + "\n");
+    // reuse the tools resolveTools() already fetched (no second RPC)
+    process.stdout.write(
+      JSON.stringify([...tools.byName.values()], null, 2) + "\n",
+    );
     return;
   }
 

@@ -47,7 +47,7 @@ The free plan also only exposes your **own** notes from the **last 30 days** (no
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shawshankkumar/yeet/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/aakashlpin/yeet/main/install.sh | bash
 ```
 
 The installer downloads `yeet` to your `bin` dir, the MCP helper to `~/.config/yeet/`, and preloads its one dependency so the first run doesn't pause to install.

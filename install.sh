@@ -3,11 +3,11 @@ set -euo pipefail
 
 # ──────────────────────────────────────────────
 # yeet installer
-# curl -fsSL https://raw.githubusercontent.com/shawshankkumar/yeet/main/install.sh | bash
+# curl -fsSL https://raw.githubusercontent.com/aakashlpin/yeet/main/install.sh | bash
 # ──────────────────────────────────────────────
 
 VERSION="2.0.0"
-REPO="${YEET_REPO:-shawshankkumar/yeet}"
+REPO="aakashlpin/yeet"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/main"
 CONFIG_DIR="$HOME/.config/yeet"
 
